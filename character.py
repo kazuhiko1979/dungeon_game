@@ -4,14 +4,18 @@ import constants
 
 
 class Character():
-    def __init__(self, x, y, mob_animations, char_type):
+    def __init__(self, x, y, health, mob_animations, char_type):
         self.char_type = char_type
+        self.score = 0
         self.flip = False
         self.animation_list = mob_animations[char_type]
         self.frame_index = 0
         self.action = 0 #0:idle, 1:run
         self.update_time = pygame.time.get_ticks()
         self.running = False
+        self.health = health
+        self.alive = True
+        
         self.image = self.animation_list[self.action][self.frame_index]
         self.rect = pygame.Rect(x, y, 40, 40)
         self.rect.center = (x, y)
@@ -33,6 +37,10 @@ class Character():
         self.rect.y += dy
         
     def update(self):
+        # check if charcter has died
+        if self.health <= 0:
+            self.health = 0
+            self.alive = False
         
         # check what action the ploayer is performing
         if self.running == True:
