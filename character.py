@@ -4,8 +4,9 @@ import constants
 
 
 class Character():
-    def __init__(self, x, y, health, mob_animations, char_type):
+    def __init__(self, x, y, health, mob_animations, char_type, boss, size):
         self.char_type = char_type
+        self.boss = boss
         self.score = 0
         self.flip = False
         self.animation_list = mob_animations[char_type]
@@ -15,12 +16,16 @@ class Character():
         self.running = False
         self.health = health
         self.alive = True
+        self.hit = False
+        self.last_hit = pygame.time.get_ticks()
+        self.stunned = False
         
         self.image = self.animation_list[self.action][self.frame_index]
-        self.rect = pygame.Rect(x, y, 40, 40)
+        self.rect = pygame.Rect(x, y, constants.TILE_SIZE * size, constants.TILE_SIZE * size)
         self.rect.center = (x, y)
         
-    def move(self, dx, dy):
+    def move(self, dx, dy, obstacle_tiles):
+        screen_scroll = [0, 0]
         self.running = False
         # control diagonal speed
         if dx != 0 or dy != 0:
@@ -33,14 +38,112 @@ class Character():
         if dx != 0 and dy != 0:
             dx = dx * (math.sqrt(2) / 2)
             dy = dy * (math.sqrt(2) / 2)    
+        # check for collition with map in x direction 
         self.rect.x += dx
+        for obstacle in obstacle_tiles:
+            # check for collision
+            if obstacle[1].colliderect(self.rect):
+                # check which side of the collition is from
+                if dx > 0:
+                    self.rect.right = obstacle[1].left
+                elif dx < 0:
+                    self.rect.left = obstacle[1].right
+        
+        # check for collition with map in y direction
         self.rect.y += dy
+        for obstacle in obstacle_tiles:
+            # check for collision
+            if obstacle[1].colliderect(self.rect):
+                # check which side of the collition is from
+                if dy > 0:
+                    self.rect.bottom = obstacle[1].top
+                elif dy < 0:
+                    self.rect.top = obstacle[1].bottom
+
+        # logic only applcable to player
+        if self.char_type == 0:
+            # update scroll based on player position
+            # move camera left and right
+            if self.rect.right > constants.SCREEN_WIDTH - constants.SCROLL_THRESH:
+                screen_scroll[0] = (constants.SCREEN_WIDTH - constants.SCROLL_THRESH)  - self.rect.right
+                self.rect.right = constants.SCREEN_WIDTH - constants.SCROLL_THRESH
+            if self.rect.left < constants.SCROLL_THRESH:
+                screen_scroll[0] = constants.SCROLL_THRESH - self.rect.left
+                self.rect.left = constants.SCROLL_THRESH
+
+            # move camera up and down
+            if self.rect.bottom > constants.SCREEN_HEIGHT - constants.SCROLL_THRESH:
+                screen_scroll[1] = (constants.SCREEN_HEIGHT - constants.SCROLL_THRESH)  - self.rect.bottom
+                self.rect.bottom = constants.SCREEN_HEIGHT - constants.SCROLL_THRESH
+            if self.rect.top < constants.SCROLL_THRESH:
+                screen_scroll[1] = constants.SCROLL_THRESH - self.rect.top
+                self.rect.top = constants.SCROLL_THRESH
+            
+            return screen_scroll
+        
+    def ai(self, player, obstacle_tiles, screen_scroll):
+        
+        clipped_line = ()
+        stunned_cooldown = 100
+        ai_dx = 0
+        ai_dy = 0
+        
+        # reposition the mobs based on screen scroll
+        self.rect.x += screen_scroll[0]
+        self.rect.y += screen_scroll[1]
+        
+        # create a line of sight from the enemy to the player
+        line_of_sight = ((self.rect.centerx, self.rect.centery), (player.rect.centerx, player.rect.centery))
+        # check if line of sight passes through an obstacle line
+        for obstacle in obstacle_tiles:
+            if obstacle[1].clipline(line_of_sight):
+                clipped_line = obstacle[1].clipline(line_of_sight)
+        
+        # check distance to player
+        dist = math.sqrt(((self.rect.centerx - player.rect.centerx) ** 2) + ((self.rect.centery - player.rect.centery) ** 2))
+        if not clipped_line and dist > constants.RANGE:
+            if self.rect.centerx > player.rect.centerx:
+                ai_dx = -constants.ENEMY_SPEED
+            if self.rect.centerx < player.rect.centerx:
+                ai_dx = constants.ENEMY_SPEED
+            if self.rect.centerx > player.rect.centerx:
+                ai_dy = -constants.ENEMY_SPEED
+            if self.rect.centerx < player.rect.centerx:
+                ai_dy = constants.ENEMY_SPEED
+        
+        if self.alive:
+            if not self.stunned:
+                # move towards player
+                self.move(ai_dx, ai_dy, obstacle_tiles)
+                # attack player
+                if dist < constants.ATTACK_RANGE and player.hit == False:
+                    player.health -= 10
+                    player.hit = True
+                    player.last_hit = pygame.time.get_ticks()
+                    
+            # check if hit
+            if self.hit == True:
+                self.hit = False
+                self.last_hit = pygame.time.get_ticks()
+                self.stunned = True
+                self.running = False
+                self.update_action(0)
+            
+            if (pygame.time.get_ticks() - self.last_hit) > stunned_cooldown:
+                self.stunned = False
+            
         
     def update(self):
         # check if charcter has died
         if self.health <= 0:
             self.health = 0
             self.alive = False
+        
+        # time to reset player taking a hit
+        hit_cooldown = 1000
+        if self.char_type == 0:
+            if self.hit == True and (pygame.time.get_ticks() - self.last_hit) > hit_cooldown:
+                self.hit = False
         
         # check what action the ploayer is performing
         if self.running == True:
