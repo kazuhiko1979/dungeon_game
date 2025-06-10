@@ -1,8 +1,10 @@
 import pygame
+import csv
 import constants
 from character import Character
 from weapon import Weapon
 from items import Item
+from world import World
 
 pygame.init()
 
@@ -11,6 +13,10 @@ pygame.display.set_caption("Dungeon Crawler")
 
 # create clock for maintaining frame rate
 clock = pygame.time.Clock()
+
+# define game variables
+level = 1
+screen_scroll = [0, 0]
 
 # define player movement variables
 moving_left = False
@@ -41,10 +47,21 @@ for x in range(4):
 # load potion images
 red_potion = scale_img(pygame.image.load("assets/images/items/potion_red.png").convert_alpha(), constants.POTION_SCALE)
     
+item_iamges = []
+item_iamges.append(coin_images)
+item_iamges.append(red_potion)  # add first coin image for item group
 
 # load weapon images
 bow_iamge = scale_img(pygame.image.load("assets/images/weapons/bow.png").convert_alpha(), constants.WEAPON_SCALE) 
 arrow_image = scale_img(pygame.image.load("assets/images/weapons/arrow.png").convert_alpha(), constants.WEAPON_SCALE) 
+
+
+# load tilemap images
+tile_list = []
+for x in range(constants.TILE_TYPES):
+    tile_image = pygame.image.load(f"assets/images/tiles/{x}.png").convert_alpha()
+    tile_image = pygame.transform.scale(tile_image, (constants.TILE_SIZE, constants.TILE_SIZE))
+    tile_list.append(tile_image)
 
 # loacd character images
 mob_animations = []
@@ -86,9 +103,36 @@ def draw_info():
             half_heart_drawn = True
         else:
             screen.blit(heart_empty, (10 + i * 50, 0))
+    
+    # level 
+    draw_text("LEVEL: " + str(level), font, constants.WHITE, constants.SCREEN_WIDTH / 2, 15)
     # show score
     draw_text(f"×{player.score}", font, constants.WHITE, constants.SCREEN_WIDTH - 100, 15)   
+
+
+# create empty tile list
+world_data = []
+for row in range(constants.ROWS):
+    r = [-1] * constants.COLS
+    world_data.append(r)
+
+# load in lvel data and create world
+with open(f"levels/level{level}_data.csv", newline='') as csvfile:
+    reader = csv.reader(csvfile, delimiter=',')
+    for x, row in enumerate(reader):
+        for y, tile in enumerate(row):
+            world_data[x][y] = int(tile)
             
+world = World()
+world.process_data(world_data, tile_list, item_iamges, mob_animations)
+
+
+def draw_grid():
+    for x in range(30):
+        pygame.draw.line(screen, constants.WHITE, (x * constants.TILE_SIZE, 0), (x * constants.TILE_SIZE, constants.SCREEN_HEIGHT))
+        pygame.draw.line(screen, constants.WHITE, (0, x  * constants.TILE_SIZE), (constants.SCREEN_WIDTH, x * constants.TILE_SIZE))
+        
+
 
 # damage text class
 class DamageText(pygame.sprite.Sprite):
@@ -100,6 +144,9 @@ class DamageText(pygame.sprite.Sprite):
         self.counter = 0
         
     def update(self):
+        # reposition based on screen scroll
+        self.rect.x += screen_scroll[0]
+        self.rect.y += screen_scroll[1]
         # move damage text up
         self.rect.y -= 1
         # delete the counter after a few seconds
@@ -108,17 +155,13 @@ class DamageText(pygame.sprite.Sprite):
             self.kill()
 
 # create player
-player = Character(100, 100, 30,  mob_animations, 0)
-
-# create enemy
-enemy = Character(200, 300, 100, mob_animations, 1)
+player = world.player
 
 # create player's weapon
 bow = Weapon(bow_iamge, arrow_image)
 
-# create empty enemy list
-enemy_list = []
-enemy_list.append(enemy)
+# extract enemies from world data
+enemy_list = world.character_list
 
 
 # create sprite groups
@@ -126,14 +169,12 @@ damege_text_group = pygame.sprite.Group()
 arrow_group = pygame.sprite.Group()
 item_group = pygame.sprite.Group()
 
-score_coin = Item(constants.SCREEN_WIDTH -115, 23, 0, coin_images)
+score_coin = Item(constants.SCREEN_WIDTH -115, 23, 0, coin_images, True)
 item_group.add(score_coin)
 
-
-potion = Item(200, 200, 1, [red_potion])
-item_group.add(potion)
-coin = Item(400, 400, 0, coin_images)
-item_group.add(coin)
+# add the items from the level data
+for item in world.item_list:
+    item_group.add(item)
 
 
 # main game loop
@@ -158,27 +199,31 @@ while run:
         dy = constants.SPEED
         
     # move player
-    player.move(dx, dy)
+    screen_scroll = player.move(dx, dy, world.obstacle_tiles)
+    print(screen_scroll)
     
-    # update player
+    # update all objects
+    world.update(screen_scroll)
     for enemy in enemy_list:
+        enemy.ai(player, world.obstacle_tiles, screen_scroll)
         enemy.update()
-        
     player.update()
     
     arrow = bow.update(player)
     if arrow:
         arrow_group.add(arrow)
     for arrow in arrow_group:
-        damage, damage_pos = arrow.update(enemy_list)
+        damage, damage_pos = arrow.update(screen_scroll, world.obstacle_tiles, enemy_list)
         if damage:
             damage_text = DamageText(damage_pos.centerx, damage_pos.y, str(damage), constants.RED)
             damege_text_group.add(damage_text)
     # update damage text
     damege_text_group.update()
-    item_group.update(player)
+    item_group.update(screen_scroll, player)
     
     # draw player on screen
+    world.draw(screen)
+    
     for enemy in  enemy_list:
         enemy.draw(screen)
     player.draw(screen)
