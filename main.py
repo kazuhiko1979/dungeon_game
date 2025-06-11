@@ -1,5 +1,7 @@
 import pygame
 import csv
+
+import pygame.examples
 import constants
 from character import Character
 from weapon import Weapon
@@ -15,7 +17,7 @@ pygame.display.set_caption("Dungeon Crawler")
 clock = pygame.time.Clock()
 
 # define game variables
-level = 3
+level = 1
 screen_scroll = [0, 0]
 
 # define player movement variables
@@ -112,23 +114,23 @@ def draw_info():
     draw_text(f"×{player.score}", font, constants.WHITE, constants.SCREEN_WIDTH - 100, 15)   
 
 
-# create empty tile list
-world_data = []
-for row in range(constants.ROWS):
-    r = [-1] * constants.COLS
-    world_data.append(r)
+# function to reset level
+def reset_level():
+    damage_text_group.empty()
+    arrow_group.empty()
+    item_group.empty()
+    fireball_group.empty()
+    
+    # create empty tile list
+    data = []
+    for row in range(constants.ROWS):
+        r = [-1] * constants.COLS
+        data.append(r)
+        
+    return data
 
-# load in lvel data and create world
-with open(f"levels/level{level}_data.csv", newline='') as csvfile:
-    reader = csv.reader(csvfile, delimiter=',')
-    for x, row in enumerate(reader):
-        for y, tile in enumerate(row):
-            world_data[x][y] = int(tile)
-            
-world = World()
-world.process_data(world_data, tile_list, item_iamges, mob_animations)
-
-
+    
+    
 def draw_grid():
     for x in range(30):
         pygame.draw.line(screen, constants.WHITE, (x * constants.TILE_SIZE, 0), (x * constants.TILE_SIZE, constants.SCREEN_HEIGHT))
@@ -156,6 +158,23 @@ class DamageText(pygame.sprite.Sprite):
         if self.counter > 30:
             self.kill()
 
+
+# create empty tile list
+world_data = []
+for row in range(constants.ROWS):
+    r = [-1] * constants.COLS
+    world_data.append(r)
+
+# load in lvel data and create world
+with open(f"levels/level{level}_data.csv", newline='') as csvfile:
+    reader = csv.reader(csvfile, delimiter=',')
+    for x, row in enumerate(reader):
+        for y, tile in enumerate(row):
+            world_data[x][y] = int(tile)
+
+world = World()
+world.process_data(world_data, tile_list, item_iamges, mob_animations)
+
 # create player
 player = world.player
 
@@ -167,7 +186,7 @@ enemy_list = world.character_list
 
 
 # create sprite groups
-damege_text_group = pygame.sprite.Group()
+damage_text_group = pygame.sprite.Group()
 arrow_group = pygame.sprite.Group()
 item_group = pygame.sprite.Group()
 fireball_group = pygame.sprite.Group()
@@ -202,7 +221,7 @@ while run:
         dy = constants.SPEED
         
     # move player
-    screen_scroll = player.move(dx, dy, world.obstacle_tiles)
+    screen_scroll, level_complete = player.move(dx, dy, world.obstacle_tiles, world.exit_tile)
     # print(screen_scroll)
     
     # update all objects
@@ -223,9 +242,9 @@ while run:
         damage, damage_pos = arrow.update(screen_scroll, world.obstacle_tiles, enemy_list)
         if damage:
             damage_text = DamageText(damage_pos.centerx, damage_pos.y, str(damage), constants.RED)
-            damege_text_group.add(damage_text)
+            damage_text_group.add(damage_text)
     # update damage text
-    damege_text_group.update()
+    damage_text_group.update()
     fireball_group.update(screen_scroll, player)
     item_group.update(screen_scroll, player)
     
@@ -241,10 +260,38 @@ while run:
         arrow.draw(screen)
     for fireball in fireball_group:
         fireball.draw(screen)
-    damege_text_group.draw(screen)
+    damage_text_group.draw(screen)
     item_group.draw(screen)
     draw_info()
     score_coin.draw(screen)
+    
+    # check level complete
+    if level_complete:
+        level += 1
+        world_data = reset_level()
+        # load in lvel data and create world
+        with open(f"levels/level{level}_data.csv", newline='') as csvfile:
+            reader = csv.reader(csvfile, delimiter=',')
+            for x, row in enumerate(reader):
+                for y, tile in enumerate(row):
+                    world_data[x][y] = int(tile)
+                    
+        world = World()
+        world.process_data(world_data, tile_list, item_iamges, mob_animations)
+        temp_hp = player.health
+        temp_score = player.score
+        
+        player = world.player
+        player.health = temp_hp
+        player.score = temp_score
+        
+        enemy_list = world.character_list
+        score_coin = Item(constants.SCREEN_WIDTH -115, 23, 0, coin_images, True)
+        item_group.add(score_coin)
+        # add the items from the level data
+        for item in world.item_list:
+            item_group.add(item)
+        
         
     
     # event handler
