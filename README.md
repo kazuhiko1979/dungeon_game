@@ -1,4 +1,4 @@
-# Dungeon Crawler Game
+# Dungeon Game
 
 ## 概要
 このプロジェクトは、PythonとPygameを使用して開発された2Dダンジョンクローラーゲームです。プレイヤーはキャラクターを操作し、敵を倒したり、アイテムを収集したりしながらダンジョンを探索します。ゲームにはスコアシステム、ライフシステム、武器システム、アニメーション、レベルデータの読み込み機能が含まれています。
@@ -25,8 +25,8 @@
 
 1. **リポジトリをクローン**
    ```bash
-   git clone https://github.com/<your-username>/dungeon_crawler_game.git
-   cd dungeon_crawler_game
+   git clone https://github.com/kazuhiko1979/dungeon_game.git
+   cd dungeon_game
 
 2.必要なライブラリをインストール
   pip install pygame
@@ -36,7 +36,7 @@
 
 実行方法
 プロジェクトフォルダに移動します。
-cd dungeon_crawler_game
+cd dungeon_game
 
 ゲームを実行します。
 python main.py
