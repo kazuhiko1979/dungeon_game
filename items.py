@@ -12,7 +12,7 @@ class Item(pygame.sprite.Sprite):
         self.rect.center = (x, y)
         self.dummy_coin = dummy_coint
         
-    def update(self, screen_scroll, player):
+    def update(self, screen_scroll, player, coin_fx, heal_fx):
         # doesn't apply to the dummy coint that is always displayed at the top of the screen
         if not self.dummy_coin:
             # repositon based on screen scroll
@@ -24,8 +24,10 @@ class Item(pygame.sprite.Sprite):
             # collect the item
             if self.item_type == 0: # coin
                 player.score += 1
+                coin_fx.play()
             elif self.item_type == 1: # health portion
                 player.health += 10
+                heal_fx.play()
                 if player.health > 100:
                     player.health = 100
             self.kill()
